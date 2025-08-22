@@ -11,12 +11,14 @@ export const http = axios.create({
   headers: { 'Content-Type': 'application/json' }
 });
 
-// Adjunta Authorization si hay token
 http.interceptors.request.use((config) => {
   const token = getToken();
   if (token) {
     config.headers = config.headers || {};
     config.headers.Authorization = `Bearer ${token}`;
+    console.log('🔐 Header Authorization añadido');
+  } else {
+    console.log('⚠️ No hay token para añadir a headers');
   }
   return config;
 });

@@ -185,44 +185,48 @@ const App: React.FC = () => {
 
   // ✅ REHIDRATACIÓN MEJORADA DE SESIÓN
   useEffect(() => {
-    const initSession = async () => {
-      const token = getToken();
+  const initSession = async () => {
+    console.log('🔄 Iniciando rehidratación de sesión...');
+    
+    const token = getToken();
+    console.log('🎫 Token recuperado:', token ? token.substring(0, 20) + '...' : 'NO TOKEN');
+    
+    if (!token) {
+      console.log('❌ No hay token, usuario no logueado');
+      setLoading(false);
+      return;
+    }
+
+    try {
+      console.log('📡 Llamando a apiProfile...');
+      const response = await apiProfile();
+      console.log('📋 Respuesta de profile:', response);
       
-      if (!token) {
-        console.log('No token found, user not logged in');
-        setLoading(false);
-        return;
-      }
-
-      try {
-        console.log('Token found, checking session...', token.substring(0, 20) + '...');
-        const response = await apiProfile();
-        console.log('Profile response:', response);
+      if (response?.success && response?.data?.user) {
+        const u = response.data.user;
+        const userObj = {
+          name: (u.full_name || `${u.first_name ?? ''} ${u.last_name ?? ''}`).trim(),
+          email: u.email,
+          company: u.company || undefined
+        };
         
-        if (response?.success && response?.data?.user) {
-          const u = response.data.user;
-          const userObj: User = {
-            name: (u.full_name || `${u.first_name ?? ''} ${u.last_name ?? ''}`).trim(),
-            email: u.email,
-            company: u.company || undefined
-          };
-          
-          setLoggedInUser(userObj);
-          console.log('Session restored for:', u.email);
-        } else {
-          console.log('Invalid session, clearing token');
-          clearToken();
-        }
-      } catch (error) {
-        console.error('Session init error:', error);
+        console.log('✅ Sesión restaurada para:', userObj);
+        setLoggedInUser(userObj);
+      } else {
+        console.log('❌ Respuesta inválida, limpiando token');
         clearToken();
-      } finally {
-        setLoading(false);
       }
-    };
+    } catch (error) {
+      console.error('💥 Error en rehidratación:', error);
+      clearToken();
+    } finally {
+      setLoading(false);
+    }
+  };
 
-    initSession();
-  }, []);
+  initSession();
+}, []);
+
 
   const handleOpenRegistration = (type: 'person' | 'company' = 'person') => {
     handleCloseModals();
