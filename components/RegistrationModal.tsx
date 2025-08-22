@@ -1,12 +1,12 @@
 // components/RegistrationModal.tsx
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { XMarkIcon } from './icons/XMarkIcon';
 import { UserIcon } from './icons/UserIcon';
 import { BuildingOfficeIcon } from './icons/BuildingOfficeIcon';
 import { EyeIcon } from './icons/EyeIcon';
 import { EyeSlashIcon } from './icons/EyeSlashIcon';
 import type { User } from '../App';
-import { register as apiRegister } from '../services/auth';
+import { register as apiRegister, setToken } from '../services/auth';
 
 interface RegistrationModalProps {
   isOpen: boolean;
@@ -28,7 +28,7 @@ export const RegistrationModal: React.FC<RegistrationModalProps> = ({
   onClose,
   onSwitchToLogin,
   initialType = 'person',
-  onRegistrationSuccess
+  onRegistrationSuccess,
 }) => {
   const [regType, setRegType] = useState<'person' | 'company'>(initialType);
   const [showPassword, setShowPassword] = useState(false);
@@ -48,46 +48,50 @@ export const RegistrationModal: React.FC<RegistrationModalProps> = ({
     e.preventDefault();
     setErrorMsg(null);
 
-    const formData = new FormData(e.currentTarget);
+    const form = new FormData(e.currentTarget);
 
     try {
       setSubmitting(true);
 
-      // Construir payload requerido por el backend
+      // payload para el backend
       let email = '';
-      let password = String(formData.get('password') || '');
+      const password = String(form.get('password') || '');
       let first_name = '';
       let last_name = '';
+      let company: string | undefined;
 
       if (regType === 'person') {
-        email = String(formData.get('email') || '');
-        first_name = String(formData.get('firstName') || '');
-        last_name = String(formData.get('lastName') || '');
+        email = String(form.get('email') || '');
+        first_name = String(form.get('firstName') || '');
+        last_name = String(form.get('lastName') || '');
       } else {
-        // Empresa: tu backend aún no recibe "company",
-        // así que mapeamos contactName -> first/last y contactEmail -> email.
-        const contactName = String(formData.get('contactName') || '');
-        const parts = splitName(contactName);
+        company = String(form.get('companyName') || '') || undefined;
+        const parts = splitName(String(form.get('contactName') || ''));
         first_name = parts.first;
         last_name = parts.last;
-        email = String(formData.get('contactEmail') || '');
+        email = String(form.get('contactEmail') || '');
       }
 
-      // Llamar al backend
       const res = await apiRegister({ email, password, first_name, last_name });
-      // res = { success, message, data: { user: {id, email, first_name, last_name, ...}, token?, ... } }
+      // res: { success, code, message, data: { user, token, expires_in, token_type? } }
 
       if (res?.success) {
-        // Armar el objeto User que espera tu app
         const u = res.data?.user;
+        const token: string | undefined = res.data?.token;
+
+        if (token) {
+          // guarda token para sesión persistente (Authorization Bearer en requests)
+          setToken(token);
+        }
+
         const userObj: User = {
           name: u ? `${u.first_name ?? ''} ${u.last_name ?? ''}`.trim() : `${first_name} ${last_name}`.trim(),
           email: u?.email ?? email,
-          // company: podrías rellenarlo con formData.get('companyName') si lo necesitas en UI
+          company,
         };
 
         onRegistrationSuccess(userObj);
-        onClose(); // opcional: cerrar modal al registrar
+        onClose();
       } else {
         setErrorMsg(res?.message || 'No se pudo registrar. Intenta de nuevo.');
       }
@@ -122,7 +126,9 @@ export const RegistrationModal: React.FC<RegistrationModalProps> = ({
             <button
               onClick={() => setRegType('person')}
               type="button"
-              className={`py-2 px-4 rounded-md font-semibold transition-colors flex items-center justify-center gap-2 ${regType === 'person' ? 'bg-white text-brand-primary shadow' : 'text-gray-600'}`}
+              className={`py-2 px-4 rounded-md font-semibold transition-colors flex items-center justify-center gap-2 ${
+                regType === 'person' ? 'bg-white text-brand-primary shadow' : 'text-gray-600'
+              }`}
             >
               <UserIcon className="w-5 h-5" />
               Persona
@@ -130,7 +136,9 @@ export const RegistrationModal: React.FC<RegistrationModalProps> = ({
             <button
               onClick={() => setRegType('company')}
               type="button"
-              className={`py-2 px-4 rounded-md font-semibold transition-colors flex items-center justify-center gap-2 ${regType === 'company' ? 'bg-white text-brand-primary shadow' : 'text-gray-600'}`}
+              className={`py-2 px-4 rounded-md font-semibold transition-colors flex items-center justify-center gap-2 ${
+                regType === 'company' ? 'bg-white text-brand-primary shadow' : 'text-gray-600'
+              }`}
             >
               <BuildingOfficeIcon className="w-5 h-5" />
               Empresa
@@ -146,12 +154,40 @@ export const RegistrationModal: React.FC<RegistrationModalProps> = ({
           <form onSubmit={handleSubmit} className="space-y-4">
             {regType === 'person' ? (
               <>
-                <input name="firstName" type="text" placeholder="Nombre" required className="w-full px-4 py-3 rounded-md border-gray-300 focus:ring-brand-secondary focus:border-brand-secondary" />
-                <input name="lastName" type="text" placeholder="Apellido" required className="w-full px-4 py-3 rounded-md border-gray-300 focus:ring-brand-secondary focus:border-brand-secondary" />
-                <input name="email" type="email" placeholder="Email" required className="w-full px-4 py-3 rounded-md border-gray-300 focus:ring-brand-secondary focus:border-brand-secondary" />
+                <input
+                  name="firstName"
+                  type="text"
+                  placeholder="Nombre"
+                  required
+                  className="w-full px-4 py-3 rounded-md border-gray-300 focus:ring-brand-secondary focus:border-brand-secondary"
+                />
+                <input
+                  name="lastName"
+                  type="text"
+                  placeholder="Apellido"
+                  required
+                  className="w-full px-4 py-3 rounded-md border-gray-300 focus:ring-brand-secondary focus:border-brand-secondary"
+                />
+                <input
+                  name="email"
+                  type="email"
+                  placeholder="Email"
+                  required
+                  className="w-full px-4 py-3 rounded-md border-gray-300 focus:ring-brand-secondary focus:border-brand-secondary"
+                />
                 <div className="relative">
-                  <input name="password" type={showPassword ? 'text' : 'password'} placeholder="Contraseña" required className="w-full px-4 py-3 rounded-md border-gray-300 focus:ring-brand-secondary focus:border-brand-secondary" />
-                  <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute inset-y-0 right-0 px-3 flex items-center text-gray-500">
+                  <input
+                    name="password"
+                    type={showPassword ? 'text' : 'password'}
+                    placeholder="Contraseña"
+                    required
+                    className="w-full px-4 py-3 rounded-md border-gray-300 focus:ring-brand-secondary focus:border-brand-secondary"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute inset-y-0 right-0 px-3 flex items-center text-gray-500"
+                  >
                     <span className="sr-only">Toggle password visibility</span>
                     {showPassword ? <EyeSlashIcon className="w-5 h-5" /> : <EyeIcon className="w-5 h-5" />}
                   </button>
@@ -159,21 +195,57 @@ export const RegistrationModal: React.FC<RegistrationModalProps> = ({
               </>
             ) : (
               <>
-                <input name="companyName" type="text" placeholder="Nombre de la Empresa" required className="w-full px-4 py-3 rounded-md border-gray-300 focus:ring-brand-secondary focus:border-brand-secondary" />
-                <input name="contactName" type="text" placeholder="Nombre de Contacto" required className="w-full px-4 py-3 rounded-md border-gray-300 focus:ring-brand-secondary focus:border-brand-secondary" />
-                <input name="contactEmail" type="email" placeholder="Email de Contacto" required className="w-full px-4 py-3 rounded-md border-gray-300 focus:ring-brand-secondary focus:border-brand-secondary" />
+                <input
+                  name="companyName"
+                  type="text"
+                  placeholder="Nombre de la Empresa"
+                  required
+                  className="w-full px-4 py-3 rounded-md border-gray-300 focus:ring-brand-secondary focus:border-brand-secondary"
+                />
+                <input
+                  name="contactName"
+                  type="text"
+                  placeholder="Nombre de Contacto"
+                  required
+                  className="w-full px-4 py-3 rounded-md border-gray-300 focus:ring-brand-secondary focus:border-brand-secondary"
+                />
+                <input
+                  name="contactEmail"
+                  type="email"
+                  placeholder="Email de Contacto"
+                  required
+                  className="w-full px-4 py-3 rounded-md border-gray-300 focus:ring-brand-secondary focus:border-brand-secondary"
+                />
                 <div className="flex gap-2">
-                  <select required className="px-4 py-3 rounded-md border-gray-300 focus:ring-brand-secondary focus:border-brand-secondary bg-white">
+                  <select
+                    required
+                    className="px-4 py-3 rounded-md border-gray-300 focus:ring-brand-secondary focus:border-brand-secondary bg-white"
+                  >
                     <option>NIT</option>
                     <option>RUC</option>
                     <option>CUIT</option>
                     <option>Otro</option>
                   </select>
-                  <input type="text" placeholder="Número" required className="w-full px-4 py-3 rounded-md border-gray-300 focus:ring-brand-secondary focus:border-brand-secondary" />
+                  <input
+                    type="text"
+                    placeholder="Número"
+                    required
+                    className="w-full px-4 py-3 rounded-md border-gray-300 focus:ring-brand-secondary focus:border-brand-secondary"
+                  />
                 </div>
                 <div className="relative">
-                  <input name="password" type={showPassword ? 'text' : 'password'} placeholder="Contraseña" required className="w-full px-4 py-3 rounded-md border-gray-300 focus:ring-brand-secondary focus:border-brand-secondary" />
-                  <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute inset-y-0 right-0 px-3 flex items-center text-gray-500">
+                  <input
+                    name="password"
+                    type={showPassword ? 'text' : 'password'}
+                    placeholder="Contraseña"
+                    required
+                    className="w-full px-4 py-3 rounded-md border-gray-300 focus:ring-brand-secondary focus:border-brand-secondary"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute inset-y-0 right-0 px-3 flex items-center text-gray-500"
+                  >
                     <span className="sr-only">Toggle password visibility</span>
                     {showPassword ? <EyeSlashIcon className="w-5 h-5" /> : <EyeIcon className="w-5 h-5" />}
                   </button>
@@ -184,7 +256,9 @@ export const RegistrationModal: React.FC<RegistrationModalProps> = ({
             <button
               type="submit"
               disabled={submitting}
-              className={`w-full bg-brand-secondary hover:bg-brand-primary text-white font-bold py-3 px-6 rounded-lg transition-colors duration-300 ${submitting ? 'opacity-70 cursor-not-allowed' : ''}`}
+              className={`w-full bg-brand-secondary hover:bg-brand-primary text-white font-bold py-3 px-6 rounded-lg transition-colors duration-300 ${
+                submitting ? 'opacity-70 cursor-not-allowed' : ''
+              }`}
             >
               {submitting ? 'Registrando…' : 'Registrarse'}
             </button>

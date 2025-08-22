@@ -1,30 +1,29 @@
 // services/auth.ts
 import { http } from './http';
 
-export type RegisterPayload = {
-  email: string;
-  password: string;
-  first_name: string;
-  last_name: string;
-};
-export type LoginPayload = { email: string; password: string };
+const KEY = import.meta.env.VITE_JWT_STORAGE_KEY || 'rancing_auth_token';
+
+export const getToken   = () => localStorage.getItem(KEY);
+export const setToken   = (t: string) => localStorage.setItem(KEY, t);
+export const clearToken = () => localStorage.removeItem(KEY);
 
 export async function register(data: RegisterPayload) {
   const res = await http.post('/auth/register', data);
-  return res.data; // { success, data: { user, token?... } }
+  if (res.data.success && res.data.data?.token) setToken(res.data.data.token);
+  return res.data;
 }
 
 export async function login(data: LoginPayload) {
   const res = await http.post('/auth/login', data);
-  return res.data; // { success, data: { user, token } } (si manejas Bearer)
+  if (res.data.success && res.data.data?.token) setToken(res.data.data.token);
+  return res.data;
 }
 
 export async function profile() {
-  const res = await http.get('/auth/profile');
-  return res.data; // requiere Authorization o cookie, según tu backend
+  return (await http.get('/auth/profile')).data;
 }
 
-export async function logout() {
-  const res = await http.post('/auth/logout', {}); // si lo implementas
-  return res.data;
+export async function logoutApi() {
+  clearToken();
+  return (await http.post('/auth/logout')).data;
 }

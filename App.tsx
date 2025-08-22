@@ -1,5 +1,5 @@
-
-import React, { useState } from 'react';
+// App.tsx
+import React, { useEffect, useState } from 'react';
 import { Header } from './components/Header';
 import { HeroSection } from './components/HeroSection';
 import { ProblemSection } from './components/ProblemSection';
@@ -28,6 +28,13 @@ import { BenefitsPage } from './components/BenefitsPage';
 import { ReportsPage } from './components/ReportsPage';
 import { ProfilePage } from './components/ProfilePage';
 
+// === Auth helpers (para sesión persistente) ===
+import {
+  profile as apiProfile,
+  getToken,
+  clearToken,
+  logoutApi,
+} from './services/auth';
 
 export interface User {
   name: string;
@@ -113,7 +120,7 @@ const eventsData: Event[] = [
   { id: 6, type: 'Evento Principal', country: 'Brasil', city: 'São Paulo', month: 'Agosto', day: 5, title: 'Congresso de Saúde Mental no Trabalho', description: 'O maior evento do Brasil focado em estratégias de saúde mental corporativa. Serão 3 dias com especialistas nacionais e internacionais, workshops e painéis de discussão sobre o futuro do trabalho.', venue: 'Expo Center Norte', slotsAvailable: 250, price: 350, speakers:[], program:[], sponsors:{platinum:[], gold:[], silver:[]}, allies:[] },
   { id: 7, type: 'Evento Principal', country: 'Colombia', city: 'Medellín', month: 'Septiembre', day: 22, title: 'Innovation Fest LATAM', description: 'Una celebración de 3 días de la innovación y la tecnología con startups y corporativos. El lugar ideal para encontrar inspiración, socios estratégicos y las próximas grandes ideas que moverán la aguja en LATAM.', venue: 'Plaza Mayor Medellín', slotsAvailable: 35, price: 260, speakers:[], program:[], sponsors:{platinum:[], gold:[], silver:[]}, allies:[] },
   { id: 8, type: 'Evento Principal', country: 'Uruguay', city: 'Montevideo', month: 'Octubre', day: 30, title: 'Summit de Cultura Organizacional', description: 'Construyendo culturas empresariales que priorizan a las personas. Un evento intensivo de 3 días para líderes de RRHH y directivos comprometidos con la creación de entornos de trabajo excepcionales.', venue: 'Radisson Montevideo Victoria Plaza', slotsAvailable: 90, price: 180, speakers:[], program:[], sponsors:{platinum:[], gold:[], silver:[]}, allies:[] },
-   { 
+  { 
     id: 11, type: 'Conferencia', country: 'Panamá', city: 'Ciudad de Panamá', month: 'Octubre', day: 15, title: 'Liderazgo Resiliente', 
     description: 'Conferencia de medio día enfocada en desarrollar habilidades de liderazgo para navegar la incertidumbre y guiar equipos hacia el éxito en entornos complejos. Una experiencia de aprendizaje intensiva y de alto impacto.', 
     venue: 'Hotel Riu Plaza Panamá', slotsAvailable: 60, price: 120, 
@@ -131,40 +138,52 @@ const eventsData: Event[] = [
 ];
 
 const newsData: NewsArticle[] = [
-    {
-        id: 1,
-        title: "La Salud Mental se Convierte en Prioridad para las Empresas 'Unicornio' de LATAM",
-        source: 'Forbes',
-        date: '15 de Oct, 2024',
-        imageUrl: 'https://images.unsplash.com/photo-1556761175-b413da4baf72?q=80&w=800&auto=format&fit=crop',
-        excerpt: 'Un nuevo estudio revela que el 85% de las startups más valiosas de la región han implementado programas robustos de bienestar mental para atraer y retener talento clave.',
-        link: '#',
-        content: '<p>En un cambio de paradigma para el ecosistema tecnológico de América Latina, las empresas valoradas en más de mil millones de dólares, conocidas como "unicornios", están poniendo la salud mental en el centro de su estrategia de talento. Según un informe reciente de Tech Latam Insights, el 85% de estas compañías de alto crecimiento han lanzado programas integrales de bienestar mental en el último año.</p><p>La medida responde a una creciente demanda de los empleados por un mayor apoyo en un entorno laboral de alta presión. "Ya no es suficiente con ofrecer snacks gratis y una mesa de ping-pong", afirma la Dra. Elena Rodríguez, autora principal del estudio. "El talento de élite busca organizaciones que inviertan genuinamente en su bienestar a largo plazo. La salud mental es la nueva frontera de la compensación y los beneficios".</p><p>Empresas como Nubank, Rappi y Kavak están liderando la carga, ofreciendo desde acceso a terapia a través de aplicaciones hasta talleres de mindfulness y políticas de "desconexión digital" para combatir el burnout. Esta inversión no es puramente altruista; los líderes empresariales citan una correlación directa entre el bienestar de los empleados, la retención de talento y la capacidad de innovación sostenida.</p>'
-    },
-    {
-        id: 2,
-        title: '¿Puede la Creatividad Ser Medida? El Nuevo Desafío de RRHH',
-        source: 'MIT Technology Review',
-        date: '12 de Oct, 2024',
-        imageUrl: 'https://images.unsplash.com/photo-1517048676732-d65bc937f952?q=80&w=800&auto=format&fit=crop',
-        excerpt: 'Expertos debaten sobre las nuevas métricas que buscan cuantificar la innovación y la capacidad creativa de los equipos, vinculándolas directamente a los resultados del negocio.',
-        link: '#',
-        content: '<p>El departamento de Recursos Humanos se enfrenta a un nuevo y complejo desafío: medir la creatividad. A medida que la innovación se convierte en el principal diferenciador competitivo, las empresas buscan desesperadamente formas de cuantificar y fomentar la capacidad creativa de sus equipos. El debate se centra en si la creatividad, a menudo vista como una chispa intangible, puede ser evaluada con la misma rigurosidad que las ventas o la productividad.</p><p>Están surgiendo nuevas herramientas y marcos, como el "Índice de Capacidad Creativa" (CCI), que evalúa factores como la seguridad psicológica, la diversidad cognitiva y la autonomía de los equipos. "No se trata de medir la genialidad de una sola persona", explica el Dr. Ken Robinson, pionero en el campo. "Se trata de medir las condiciones que permiten que la creatividad florezca a escala organizacional".</p><p>Sin embargo, los escépticos advierten sobre el riesgo de sofocar la innovación al intentar estandarizarla. Argumentan que una presión excesiva sobre métricas de creatividad podría llevar a un enfoque en ideas incrementales y seguras en lugar de avances disruptivos. El equilibrio, parece ser, está en usar estos datos no como un juicio, sino como un mapa para identificar y eliminar las barreras a la innovación.</p>'
-    },
-    {
-        id: 3,
-        title: 'Colombia Lidera en Iniciativas de Bienestar Laboral en Sudamérica',
-        source: 'El Tiempo',
-        date: '10 de Oct, 2024',
-        imageUrl: 'https://images.unsplash.com/photo-1522202176988-66273c2fd55f?q=80&w=800&auto=format&fit=crop',
-        excerpt: 'Empresas colombianas están a la vanguardia, adoptando modelos flexibles y programas de salud mental que están marcando la pauta para el resto de la región.',
-        link: '#',
-        content: '<p>Colombia se está posicionando como un líder inesperado en la revolución del bienestar corporativo en Sudamérica. Un informe comparativo de la Organización para la Cooperación y el Desarrollo Económicos (OCDE) destaca que las empresas con sede en Colombia muestran la tasa más alta de adopción de políticas de trabajo flexible y programas de apoyo a la salud mental en la región.</p><p>Compañías como Bancolombia, Ecopetrol y el Grupo Nutresa han sido elogiadas por sus enfoques integrales, que van más allá de los beneficios básicos para incluir coaching de resiliencia, semanas laborales de cuatro días y programas de apoyo para las familias de los empleados. "Entendimos que la productividad está directamente ligada al bienestar", comenta un directivo de una de las empresas destacadas. "Un empleado que se siente apoyado y equilibrado es un empleado más comprometido, creativo y leal".</p><p>Este enfoque proactivo está dando sus frutos, no solo en la mejora de los indicadores de clima laboral, sino también en la atracción de talento internacional. Colombia está demostrando que invertir en la cultura del bienestar no es solo una cuestión de responsabilidad social, sino una estrategia de negocio inteligente que puede impulsar la competitividad a nivel global.</p>'
-    }
+  {
+    id: 1,
+    title: "La Salud Mental se Convierte en Prioridad para las Empresas 'Unicornio' de LATAM",
+    source: 'Forbes',
+    date: '15 de Oct, 2024',
+    imageUrl: 'https://images.unsplash.com/photo-1556761175-b413da4baf72?q=80&w=800&auto=format&fit=crop',
+    excerpt: 'Un nuevo estudio revela que el 85% de las startups más valiosas de la región han implementado programas robustos de bienestar mental para atraer y retener talento clave.',
+    link: '#',
+    content: '<p>En un cambio de paradigma para el ecosistema tecnológico de América Latina, las empresas valoradas en más de mil millones de dólares, conocidas como "unicornios", están poniendo la salud mental en el centro de su estrategia de talento. Según un informe reciente de Tech Latam Insights, el 85% de estas compañías de alto crecimiento han lanzado programas integrales de bienestar mental en el último año.</p><p>La medida responde a una creciente demanda de los empleados por un mayor apoyo en un entorno laboral de alta presión. "Ya no es suficiente con ofrecer snacks gratis y una mesa de ping-pong", afirma la Dra. Elena Rodríguez, autora principal del estudio. "El talento de élite busca organizaciones que inviertan genuinamente en su bienestar a largo plazo. La salud mental es la nueva frontera de la compensación y los beneficios".</p><p>Empresas como Nubank, Rappi y Kavak están liderando la carga, ofreciendo desde acceso a terapia a través de aplicaciones hasta talleres de mindfulness y políticas de "desconexión digital" para combatir el burnout. Esta inversión no es puramente altruista; los líderes empresariales citan una correlación directa entre el bienestar de los empleados, la retención de talento y la capacidad de innovación sostenida.</p>'
+  },
+  {
+    id: 2,
+    title: '¿Puede la Creatividad Ser Medida? El Nuevo Desafío de RRHH',
+    source: 'MIT Technology Review',
+    date: '12 de Oct, 2024',
+    imageUrl: 'https://images.unsplash.com/photo-1517048676732-d65bc937f952?q=80&w=800&auto=format&fit=crop',
+    excerpt: 'Expertos debaten sobre las nuevas métricas que buscan cuantificar la innovación y la capacidad creativa de los equipos, vinculándolas directamente a los resultados del negocio.',
+    link: '#',
+    content: '<p>El departamento de Recursos Humanos se enfrenta a un nuevo y complejo desafío: medir la creatividad. A medida que la innovación se convierte en el principal diferenciador competitivo, las empresas buscan desesperadamente formas de cuantificar y fomentar la capacidad creativa de sus equipos. El debate se centra en si la creatividad, a menudo vista como una chispa intangible, puede ser evaluada con la misma rigurosidad que las ventas o la productividad.</p><p>Están surgiendo nuevas herramientas y marcos, como el "Índice de Capacidad Creativa" (CCI), que evalúa factores como la seguridad psicológica, la diversidad cognitiva y la autonomía de los equipos. "No se trata de medir la genialidad de una sola persona", explica el Dr. Ken Robinson, pionero en el campo. "Se trata de medir las condiciones que permiten que la creatividad florezca a escala organizacional".</p><p>Sin embargo, los escépticos advierten sobre el riesgo de sofocar la innovación al intentar estandarizarla. Argumentan que una presión excesiva sobre métricas de creatividad podría llevar a un enfoque en ideas incrementales y seguras en lugar de avances disruptivos. El equilibrio, parece ser, está en usar estos datos no como un juicio, sino como un mapa para identificar y eliminar las barreras a la innovación.</p>'
+  },
+  {
+    id: 3,
+    title: 'Colombia Lidera en Iniciativas de Bienestar Laboral en Sudamérica',
+    source: 'El Tiempo',
+    date: '10 de Oct, 2024',
+    imageUrl: 'https://images.unsplash.com/photo-1522202176988-66273c2fd55f?q=80&w=800&auto=format&fit=crop',
+    excerpt: 'Empresas colombianas están a la vanguardia, adoptando modelos flexibles y programas de salud mental que están marcando la pauta para el resto de la región.',
+    link: '#',
+    content: '<p>Colombia se está posicionando como un líder inesperado en la revolución del bienestar corporativo en Sudamérica. Un informe comparativo de la Organización para la Cooperación y el Desarrollo Económicos (OCDE) destaca que las empresas con sede en Colombia muestran la tasa más alta de adopción de políticas de trabajo flexible y programas de apoyo a la salud mental en la región.</p><p>Compañías como Bancolombia, Ecopetrol y el Grupo Nutresa han sido elogiadas por sus enfoques integrales, que van más allá de los beneficios básicos para incluir coaching de resiliencia, semanas laborales de cuatro días y programas de apoyo para las familias de los empleados. "Entendimos que la productividad está directamente ligada al bienestar", comenta un directivo de una de las empresas destacadas. "Un empleado que se siente apoyado y equilibrado es un empleado más comprometido, creativo y leal".</p><p>Este enfoque proactivo está dando sus frutos, no solo en la mejora de los indicadores de clima laboral, sino también en la atracción de talento internacional. Colombia está demostrando que invertir en la cultura del bienestar no es solo una cuestión de responsabilidad social, sino una estrategia de negocio inteligente que puede impulsar la competitividad a nivel global.</p>'
+  }
 ];
 
-
-type View = 'home' | 'ranking' | 'events' | 'eventDetail' | 'terms' | 'privacy' | 'sello' | 'news' | 'newsDetail' | 'myEvents' | 'benefits' | 'reports' | 'profile';
+type View =
+  | 'home'
+  | 'ranking'
+  | 'events'
+  | 'eventDetail'
+  | 'terms'
+  | 'privacy'
+  | 'sello'
+  | 'news'
+  | 'newsDetail'
+  | 'myEvents'
+  | 'benefits'
+  | 'reports'
+  | 'profile';
 
 const App: React.FC = () => {
   const [view, setView] = useState<View>('home');
@@ -177,21 +196,49 @@ const App: React.FC = () => {
   const [isContactModalOpen, setIsContactModalOpen] = useState(false);
   const [loggedInUser, setLoggedInUser] = useState<User | null>(null);
   const [userRegisteredEvents, setUserRegisteredEvents] = useState<Event[]>([]);
+  const [booting, setBooting] = useState(true);
+
+  // === Rehidratar sesión al cargar si hay token guardado ===
+  useEffect(() => {
+    const token = getToken();
+    if (!token) {
+      setBooting(false);
+      return;
+    }
+    (async () => {
+      try {
+        const me = await apiProfile();
+        const u = me?.data?.user;
+        if (u) {
+          setLoggedInUser({
+            name: `${u.first_name ?? ''} ${u.last_name ?? ''}`.trim(),
+            email: u.email,
+          });
+        } else {
+          clearToken();
+        }
+      } catch {
+        clearToken();
+      } finally {
+        setBooting(false);
+      }
+    })();
+  }, []);
 
   const handleOpenRegistration = (type: 'person' | 'company' = 'person') => {
     handleCloseModals();
     setRegistrationInitialType(type);
     setIsRegistrationModalOpen(true);
   };
-  
+
   const handleOpenLogin = () => {
     handleCloseModals();
     setIsLoginModalOpen(true);
   };
-  
+
   const handleLoginSuccess = (user: User) => {
-      setLoggedInUser(user);
-      handleCloseModals();
+    setLoggedInUser(user);
+    handleCloseModals();
   };
 
   const handleRegistrationSuccess = (user: User) => {
@@ -199,15 +246,16 @@ const App: React.FC = () => {
     handleCloseModals();
   };
 
-  const handleLogout = () => {
-      setLoggedInUser(null);
-      setUserRegisteredEvents([]);
-      handleSetView('home');
+  const handleLogout = async () => {
+    await logoutApi(); // limpia servidor (si aplica) y localStorage
+    setLoggedInUser(null);
+    setUserRegisteredEvents([]);
+    handleSetView('home');
   };
 
   const handleRegisterForEventAndLogin = (user: User, event: Event) => {
     setLoggedInUser(user);
-    setUserRegisteredEvents(prevEvents => [...prevEvents, event]);
+    setUserRegisteredEvents((prevEvents) => [...prevEvents, event]);
     handleCloseModals();
     handleSetView('myEvents');
   };
@@ -234,7 +282,7 @@ const App: React.FC = () => {
     setSelectedNews(null);
     window.scrollTo(0, 0);
     setView(newView);
-  }
+  };
 
   const handleSelectEvent = (event: Event) => {
     setSelectedEvent(event);
@@ -246,7 +294,7 @@ const App: React.FC = () => {
     setSelectedEvent(null);
     setView('events');
   };
-  
+
   const handleSelectNews = (article: NewsArticle) => {
     setSelectedNews(article);
     window.scrollTo(0, 0);
@@ -269,7 +317,7 @@ const App: React.FC = () => {
             <HowItWorksSection />
             <BenefitsSection />
             <UpcomingEventsSection events={eventsData} setView={handleSetView} onSelectEvent={handleSelectEvent} />
-            <NewsSection news={newsData} setView={handleSetView} onSelectNews={handleSelectNews}/>
+            <NewsSection news={newsData} setView={handleSetView} onSelectNews={handleSelectNews} />
             <CredibilitySection />
             <AlliesSection />
           </>
@@ -279,7 +327,11 @@ const App: React.FC = () => {
       case 'events':
         return <EventsPage events={eventsData} onSelectEvent={handleSelectEvent} />;
       case 'eventDetail':
-        return selectedEvent ? <EventDetailPage event={selectedEvent} onBack={handleBackToEvents} onRegisterSuccess={handleRegisterForEventAndLogin} /> : <EventsPage events={eventsData} onSelectEvent={handleSelectEvent} />;
+        return selectedEvent ? (
+          <EventDetailPage event={selectedEvent} onBack={handleBackToEvents} onRegisterSuccess={handleRegisterForEventAndLogin} />
+        ) : (
+          <EventsPage events={eventsData} onSelectEvent={handleSelectEvent} />
+        );
       case 'news':
         return <NewsPage news={newsData} onSelectNews={handleSelectNews} />;
       case 'newsDetail':
@@ -289,15 +341,17 @@ const App: React.FC = () => {
       case 'privacy':
         return <PrivacyPage onBack={() => handleSetView('home')} />;
       case 'sello':
-        return <SelloPage 
-                  onBack={() => handleSetView('home')} 
-                  onRegisterClick={() => handleOpenRegistration('company')}
-                  events={eventsData}
-                  setView={handleSetView}
-                  onSelectEvent={handleSelectEvent}
-                  news={newsData}
-                  onSelectNews={handleSelectNews}
-                />;
+        return (
+          <SelloPage
+            onBack={() => handleSetView('home')}
+            onRegisterClick={() => handleOpenRegistration('company')}
+            events={eventsData}
+            setView={handleSetView}
+            onSelectEvent={handleSelectEvent}
+            news={newsData}
+            onSelectNews={handleSelectNews}
+          />
+        );
       case 'myEvents':
         return loggedInUser ? <MyEventsPage user={loggedInUser} registeredEvents={userRegisteredEvents} onBack={() => handleSetView('home')} /> : null;
       case 'benefits':
@@ -311,46 +365,42 @@ const App: React.FC = () => {
     }
   };
 
+  // Puedes mostrar un pequeño loader mientras rehidratas la sesión
+  if (booting) {
+    return (
+      <div className="min-h-screen flex items-center justify-center text-brand-primary">
+        Cargando…
+      </div>
+    );
+  }
+
   return (
     <div className="bg-brand-light font-sans text-brand-dark">
-      <Header 
+      <Header
         user={loggedInUser}
-        setView={handleSetView} 
+        setView={handleSetView}
         onLoginClick={handleOpenLogin}
         onRegisterClick={handleOpenRegistration}
         onLogout={handleLogout}
       />
-      <main>
-        {renderContent()}
-      </main>
-      <Footer 
-        onSetView={handleSetView}
-        onOpenContact={handleOpenContact}
-        onOpenRegister={handleOpenRegistration}
-      />
-      <RegistrationModal 
-        isOpen={isRegistrationModalOpen} 
-        onClose={handleCloseModals} 
-        onSwitchToLogin={handleOpenLogin} 
+      <main>{renderContent()}</main>
+      <Footer onSetView={handleSetView} onOpenContact={handleOpenContact} onOpenRegister={handleOpenRegistration} />
+      <RegistrationModal
+        isOpen={isRegistrationModalOpen}
+        onClose={handleCloseModals}
+        onSwitchToLogin={handleOpenLogin}
         initialType={registrationInitialType}
         onRegistrationSuccess={handleRegistrationSuccess}
       />
-      <LoginModal 
-        isOpen={isLoginModalOpen} 
-        onClose={handleCloseModals} 
+      <LoginModal
+        isOpen={isLoginModalOpen}
+        onClose={handleCloseModals}
         onSwitchToRegister={handleOpenRegistration}
         onForgotPasswordClick={handleOpenForgotPassword}
         onLoginSuccess={handleLoginSuccess}
       />
-      <ForgotPasswordModal
-        isOpen={isForgotPasswordModalOpen}
-        onClose={handleCloseModals}
-        onSwitchToLogin={handleOpenLogin}
-      />
-      <ContactModal 
-        isOpen={isContactModalOpen}
-        onClose={handleCloseModals}
-      />
+      <ForgotPasswordModal isOpen={isForgotPasswordModalOpen} onClose={handleCloseModals} onSwitchToLogin={handleOpenLogin} />
+      <ContactModal isOpen={isContactModalOpen} onClose={handleCloseModals} />
     </div>
   );
 };
