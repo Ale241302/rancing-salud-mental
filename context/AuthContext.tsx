@@ -1,34 +1,67 @@
 // context/AuthContext.tsx
-import React, { createContext, useState, useEffect } from 'react';
-import { profile as apiProfile } from '../services/auth';
+import React, { createContext, useContext, useEffect, useState } from 'react';
+import { profile, clearToken } from '../services/auth';
+import type { User } from '../App';
 
-export interface User { name: string; email: string; }
-
-interface AuthCtx {
+interface AuthContextType {
   user: User | null;
-  setUser: (u: User | null) => void;
+  setUser: (user: User | null) => void;
+  loading: boolean;
+  logout: () => void;
 }
 
-export const AuthContext = createContext<AuthCtx>(null!);
+const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
+  const [loading, setLoading] = useState(true);
 
-  // al montar la app intenta cargar la sesión
   useEffect(() => {
-    (async () => {
-      try {
-        const res = await apiProfile();   // GET /auth/profile
-        if (res.success) setUser(res.data.user);
-      } catch {
-        /* sin sesión */
+    const initAuth = async () => {
+      const token = localStorage.getItem('rancing_auth_token');
+      if (!token) {
+        setLoading(false);
+        return;
       }
-    })();
+
+      try {
+        const response = await profile();
+        if (response.success && response.data?.user) {
+          const u = response.data.user;
+          setUser({
+            name: `${u.first_name || ''} ${u.last_name || ''}`.trim(),
+            email: u.email,
+          });
+        } else {
+          clearToken();
+        }
+      } catch (error) {
+        clearToken();
+        console.error('Auth init error:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    initAuth();
   }, []);
 
+  const logout = () => {
+    clearToken();
+    setUser(null);
+  };
+
   return (
-    <AuthContext.Provider value={{ user, setUser }}>
+    <AuthContext.Provider value={{ user, setUser, loading, logout }}>
       {children}
     </AuthContext.Provider>
   );
+};
+
+export const useAuth = () => {
+  const context = useContext(AuthContext);
+  if (context === undefined) {
+    throw new Error('useAuth must be used within an AuthProvider');
+  }
+  return context;
 };

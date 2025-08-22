@@ -27,15 +27,10 @@ import { MyEventsPage } from './components/MyEventsPage';
 import { BenefitsPage } from './components/BenefitsPage';
 import { ReportsPage } from './components/ReportsPage';
 import { ProfilePage } from './components/ProfilePage';
+import { profile as apiProfile, logout as apiLogout } from './services/auth';
+import { getToken } from './services/session';
 
-// === Auth helpers (para sesión persistente) ===
-import {
-  profile as apiProfile,
-  getToken,
-  clearToken,
-  logoutApi,
-} from './services/auth';
-
+// === (Tu data de eventos y noticias igual que antes) ===
 export interface User {
   name: string;
   email: string;
@@ -171,19 +166,8 @@ const newsData: NewsArticle[] = [
 ];
 
 type View =
-  | 'home'
-  | 'ranking'
-  | 'events'
-  | 'eventDetail'
-  | 'terms'
-  | 'privacy'
-  | 'sello'
-  | 'news'
-  | 'newsDetail'
-  | 'myEvents'
-  | 'benefits'
-  | 'reports'
-  | 'profile';
+  | 'home' | 'ranking' | 'events' | 'eventDetail' | 'terms' | 'privacy'
+  | 'sello' | 'news' | 'newsDetail' | 'myEvents' | 'benefits' | 'reports' | 'profile';
 
 const App: React.FC = () => {
   const [view, setView] = useState<View>('home');
@@ -198,27 +182,22 @@ const App: React.FC = () => {
   const [userRegisteredEvents, setUserRegisteredEvents] = useState<Event[]>([]);
   const [booting, setBooting] = useState(true);
 
-  // === Rehidratar sesión al cargar si hay token guardado ===
+  // Rehidratación: si hay token, llamar /auth/profile
   useEffect(() => {
-    const token = getToken();
-    if (!token) {
-      setBooting(false);
-      return;
-    }
     (async () => {
       try {
-        const me = await apiProfile();
-        const u = me?.data?.user;
-        if (u) {
+        const token = getToken();
+        if (!token) return;
+        const res = await apiProfile();
+        if (res?.success && res?.data?.user) {
+          const u = res.data.user;
           setLoggedInUser({
-            name: `${u.first_name ?? ''} ${u.last_name ?? ''}`.trim(),
-            email: u.email,
+            name: (u.full_name || `${u.first_name ?? ''} ${u.last_name ?? ''}`).trim(),
+            email: u.email
           });
-        } else {
-          clearToken();
         }
-      } catch {
-        clearToken();
+      } catch (e) {
+        // token inválido → noop
       } finally {
         setBooting(false);
       }
@@ -246,8 +225,8 @@ const App: React.FC = () => {
     handleCloseModals();
   };
 
-  const handleLogout = async () => {
-    await logoutApi(); // limpia servidor (si aplica) y localStorage
+  const handleLogout = () => {
+    apiLogout();
     setLoggedInUser(null);
     setUserRegisteredEvents([]);
     handleSetView('home');
@@ -255,7 +234,7 @@ const App: React.FC = () => {
 
   const handleRegisterForEventAndLogin = (user: User, event: Event) => {
     setLoggedInUser(user);
-    setUserRegisteredEvents((prevEvents) => [...prevEvents, event]);
+    setUserRegisteredEvents(prevEvents => [...prevEvents, event]);
     handleCloseModals();
     handleSetView('myEvents');
   };
@@ -317,7 +296,7 @@ const App: React.FC = () => {
             <HowItWorksSection />
             <BenefitsSection />
             <UpcomingEventsSection events={eventsData} setView={handleSetView} onSelectEvent={handleSelectEvent} />
-            <NewsSection news={newsData} setView={handleSetView} onSelectNews={handleSelectNews} />
+            <NewsSection news={newsData} setView={handleSetView} onSelectNews={handleSelectNews}/>
             <CredibilitySection />
             <AlliesSection />
           </>
@@ -327,11 +306,7 @@ const App: React.FC = () => {
       case 'events':
         return <EventsPage events={eventsData} onSelectEvent={handleSelectEvent} />;
       case 'eventDetail':
-        return selectedEvent ? (
-          <EventDetailPage event={selectedEvent} onBack={handleBackToEvents} onRegisterSuccess={handleRegisterForEventAndLogin} />
-        ) : (
-          <EventsPage events={eventsData} onSelectEvent={handleSelectEvent} />
-        );
+        return selectedEvent ? <EventDetailPage event={selectedEvent} onBack={handleBackToEvents} onRegisterSuccess={handleRegisterForEventAndLogin} /> : <EventsPage events={eventsData} onSelectEvent={handleSelectEvent} />;
       case 'news':
         return <NewsPage news={newsData} onSelectNews={handleSelectNews} />;
       case 'newsDetail':
@@ -341,17 +316,15 @@ const App: React.FC = () => {
       case 'privacy':
         return <PrivacyPage onBack={() => handleSetView('home')} />;
       case 'sello':
-        return (
-          <SelloPage
-            onBack={() => handleSetView('home')}
-            onRegisterClick={() => handleOpenRegistration('company')}
-            events={eventsData}
-            setView={handleSetView}
-            onSelectEvent={handleSelectEvent}
-            news={newsData}
-            onSelectNews={handleSelectNews}
-          />
-        );
+        return <SelloPage 
+                  onBack={() => handleSetView('home')} 
+                  onRegisterClick={() => handleOpenRegistration('company')}
+                  events={eventsData}
+                  setView={handleSetView}
+                  onSelectEvent={handleSelectEvent}
+                  news={newsData}
+                  onSelectNews={handleSelectNews}
+                />;
       case 'myEvents':
         return loggedInUser ? <MyEventsPage user={loggedInUser} registeredEvents={userRegisteredEvents} onBack={() => handleSetView('home')} /> : null;
       case 'benefits':
@@ -365,42 +338,49 @@ const App: React.FC = () => {
     }
   };
 
-  // Puedes mostrar un pequeño loader mientras rehidratas la sesión
+  // (Opcional) Pequeño estado de boot mientras rehidrata
   if (booting) {
-    return (
-      <div className="min-h-screen flex items-center justify-center text-brand-primary">
-        Cargando…
-      </div>
-    );
+    return <div className="min-h-screen grid place-items-center text-brand-primary">Cargando…</div>;
   }
 
   return (
     <div className="bg-brand-light font-sans text-brand-dark">
-      <Header
+      <Header 
         user={loggedInUser}
-        setView={handleSetView}
+        setView={handleSetView} 
         onLoginClick={handleOpenLogin}
         onRegisterClick={handleOpenRegistration}
         onLogout={handleLogout}
       />
       <main>{renderContent()}</main>
-      <Footer onSetView={handleSetView} onOpenContact={handleOpenContact} onOpenRegister={handleOpenRegistration} />
-      <RegistrationModal
-        isOpen={isRegistrationModalOpen}
-        onClose={handleCloseModals}
-        onSwitchToLogin={handleOpenLogin}
+      <Footer 
+        onSetView={handleSetView}
+        onOpenContact={handleOpenContact}
+        onOpenRegister={handleOpenRegistration}
+      />
+      <RegistrationModal 
+        isOpen={isRegistrationModalOpen} 
+        onClose={handleCloseModals} 
+        onSwitchToLogin={handleOpenLogin} 
         initialType={registrationInitialType}
         onRegistrationSuccess={handleRegistrationSuccess}
       />
-      <LoginModal
-        isOpen={isLoginModalOpen}
-        onClose={handleCloseModals}
+      <LoginModal 
+        isOpen={isLoginModalOpen} 
+        onClose={handleCloseModals} 
         onSwitchToRegister={handleOpenRegistration}
         onForgotPasswordClick={handleOpenForgotPassword}
         onLoginSuccess={handleLoginSuccess}
       />
-      <ForgotPasswordModal isOpen={isForgotPasswordModalOpen} onClose={handleCloseModals} onSwitchToLogin={handleOpenLogin} />
-      <ContactModal isOpen={isContactModalOpen} onClose={handleCloseModals} />
+      <ForgotPasswordModal
+        isOpen={isForgotPasswordModalOpen}
+        onClose={handleCloseModals}
+        onSwitchToLogin={handleOpenLogin}
+      />
+      <ContactModal 
+        isOpen={isContactModalOpen}
+        onClose={handleCloseModals}
+      />
     </div>
   );
 };
