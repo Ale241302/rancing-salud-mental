@@ -27,10 +27,11 @@ import { MyEventsPage } from './components/MyEventsPage';
 import { BenefitsPage } from './components/BenefitsPage';
 import { ReportsPage } from './components/ReportsPage';
 import { ProfilePage } from './components/ProfilePage';
-import { profile as apiProfile, logout as apiLogout } from './services/auth';
-import { getToken } from './services/session';
 
-// === (Tu data de eventos y noticias igual que antes) ===
+// ✅ IMPORTS CORREGIDOS PARA SESIÓN
+import { profile as apiProfile, logout as apiLogout } from './services/auth';
+import { getToken, clearToken } from './services/session';
+
 export interface User {
   name: string;
   email: string;
@@ -165,7 +166,7 @@ const newsData: NewsArticle[] = [
   }
 ];
 
-type View =
+type View = 
   | 'home' | 'ranking' | 'events' | 'eventDetail' | 'terms' | 'privacy'
   | 'sello' | 'news' | 'newsDetail' | 'myEvents' | 'benefits' | 'reports' | 'profile';
 
@@ -180,28 +181,47 @@ const App: React.FC = () => {
   const [isContactModalOpen, setIsContactModalOpen] = useState(false);
   const [loggedInUser, setLoggedInUser] = useState<User | null>(null);
   const [userRegisteredEvents, setUserRegisteredEvents] = useState<Event[]>([]);
-  const [booting, setBooting] = useState(true);
+  const [loading, setLoading] = useState(true); // ✅ Cambié booting por loading
 
-  // Rehidratación: si hay token, llamar /auth/profile
+  // ✅ REHIDRATACIÓN MEJORADA DE SESIÓN
   useEffect(() => {
-    (async () => {
-      try {
-        const token = getToken();
-        if (!token) return;
-        const res = await apiProfile();
-        if (res?.success && res?.data?.user) {
-          const u = res.data.user;
-          setLoggedInUser({
-            name: (u.full_name || `${u.first_name ?? ''} ${u.last_name ?? ''}`).trim(),
-            email: u.email
-          });
-        }
-      } catch (e) {
-        // token inválido → noop
-      } finally {
-        setBooting(false);
+    const initSession = async () => {
+      const token = getToken();
+      
+      if (!token) {
+        console.log('No token found, user not logged in');
+        setLoading(false);
+        return;
       }
-    })();
+
+      try {
+        console.log('Token found, checking session...', token.substring(0, 20) + '...');
+        const response = await apiProfile();
+        console.log('Profile response:', response);
+        
+        if (response?.success && response?.data?.user) {
+          const u = response.data.user;
+          const userObj: User = {
+            name: (u.full_name || `${u.first_name ?? ''} ${u.last_name ?? ''}`).trim(),
+            email: u.email,
+            company: u.company || undefined
+          };
+          
+          setLoggedInUser(userObj);
+          console.log('Session restored for:', u.email);
+        } else {
+          console.log('Invalid session, clearing token');
+          clearToken();
+        }
+      } catch (error) {
+        console.error('Session init error:', error);
+        clearToken();
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    initSession();
   }, []);
 
   const handleOpenRegistration = (type: 'person' | 'company' = 'person') => {
@@ -216,20 +236,31 @@ const App: React.FC = () => {
   };
 
   const handleLoginSuccess = (user: User) => {
+    console.log('Login success, setting user:', user);
     setLoggedInUser(user);
     handleCloseModals();
   };
 
   const handleRegistrationSuccess = (user: User) => {
+    console.log('Registration success, setting user:', user);
     setLoggedInUser(user);
     handleCloseModals();
   };
 
-  const handleLogout = () => {
-    apiLogout();
+  // ✅ LOGOUT MEJORADO
+  const handleLogout = async () => {
+    try {
+      console.log('Logging out...');
+      await apiLogout();
+    } catch (error) {
+      console.error('Logout error:', error);
+    }
+    
+    clearToken();
     setLoggedInUser(null);
     setUserRegisteredEvents([]);
     handleSetView('home');
+    console.log('User logged out successfully');
   };
 
   const handleRegisterForEventAndLogin = (user: User, event: Event) => {
@@ -338,9 +369,16 @@ const App: React.FC = () => {
     }
   };
 
-  // (Opcional) Pequeño estado de boot mientras rehidrata
-  if (booting) {
-    return <div className="min-h-screen grid place-items-center text-brand-primary">Cargando…</div>;
+  // ✅ LOADING MEJORADO MIENTRAS SE REHIDRATA
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center text-brand-primary">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand-primary mx-auto mb-2"></div>
+          <p>Cargando sesión...</p>
+        </div>
+      </div>
+    );
   }
 
   return (

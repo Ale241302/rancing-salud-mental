@@ -62,7 +62,12 @@ export async function profile() {
   const res = await http.get('/auth/profile');
   return res.data; // { success, data: { user } }
 }
-
-export function logout() {
-  clearToken();
+export async function logout() {
+  try {
+    await http.post('/auth/logout');
+  } catch (error) {
+    console.error('Logout API error:', error);
+  } finally {
+    clearToken();
+  }
 }
